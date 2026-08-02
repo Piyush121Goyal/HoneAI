@@ -43,11 +43,12 @@ class Settings(BaseSettings):
     google_client_secret: str | None = None
 
     # --- llm provider ---
-    # one of: "mock" | "anthropic" | "openai" | "gemini"
+    # one of: "mock" | "anthropic" | "openai" | "gemini" | "groq"
     llm_provider: str = "mock"
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     gemini_api_key: str | None = None
+    groq_api_key: str | None = None
     llm_model: str = "claude-3-5-sonnet-latest"
     embed_dim: int = 1536
 

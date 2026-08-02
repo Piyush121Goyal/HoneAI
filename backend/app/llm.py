@@ -43,6 +43,8 @@ class LLMClient:
                 return await self._openai_complete(system, prompt)
             if self.provider == "gemini" and settings.gemini_api_key:
                 return await self._gemini_complete(system, prompt)
+            if self.provider == "groq" and settings.groq_api_key:
+                return await self._groq_complete(system, prompt)
         except (httpx.HTTPError, KeyError, IndexError):
             pass
         return self._mock_complete(system, prompt)
@@ -60,6 +62,10 @@ class LLMClient:
                 return
             if self.provider == "gemini" and settings.gemini_api_key:
                 async for tok in self._gemini_stream(system, prompt):
+                    yield tok
+                return
+            if self.provider == "groq" and settings.groq_api_key:
+                async for tok in self._groq_stream(system, prompt):
                     yield tok
                 return
         except (httpx.HTTPError, KeyError, IndexError):
@@ -216,6 +222,56 @@ class LLMClient:
                         for part in parts:
                             if part.get("text"):
                                 yield part["text"]
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+
+    # -------------------------------- groq --------------------------------- #
+    # Groq's API is OpenAI-compatible (chat completions wire format), just a
+    # different base URL and key.
+    async def _groq_complete(self, system: str, prompt: str) -> tuple[str, Usage]:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                json={
+                    "model": settings.llm_model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                    ],
+                },
+            )
+            r.raise_for_status()
+            data = r.json()
+            text = data["choices"][0]["message"]["content"]
+            u = data.get("usage", {})
+            return text, Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+
+    async def _groq_stream(self, system: str, prompt: str) -> AsyncIterator[str]:
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream(
+                "POST",
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                json={
+                    "model": settings.llm_model,
+                    "stream": True,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                    ],
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        evt = json.loads(payload)
+                        yield evt["choices"][0]["delta"].get("content", "")
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
 
