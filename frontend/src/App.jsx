@@ -181,7 +181,10 @@ const api = {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      buf += dec.decode(value, { stream: true });
+      // The SSE spec allows CRLF, LF, or CR as the line terminator — some
+      // servers (sse-starlette included) send CRLF, so normalize before
+      // splitting on the blank-line block separator.
+      buf += dec.decode(value, { stream: true }).replace(/\r\n/g, "\n");
       const blocks = buf.split("\n\n");
       buf = blocks.pop() || "";
       for (const b of blocks) parseSSE(b, { onStage, onToken });
