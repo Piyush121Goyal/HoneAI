@@ -30,29 +30,42 @@ class LLMClient:
 
     # ------------------------- public methods ------------------------- #
     async def complete(self, system: str, prompt: str) -> tuple[str, Usage]:
-        """Single-shot, non-streaming completion (used by pipeline stages)."""
-        if self.provider == "anthropic" and settings.anthropic_api_key:
-            return await self._anthropic_complete(system, prompt)
-        if self.provider == "openai" and settings.openai_api_key:
-            return await self._openai_complete(system, prompt)
-        if self.provider == "gemini" and settings.gemini_api_key:
-            return await self._gemini_complete(system, prompt)
+        """Single-shot, non-streaming completion (used by pipeline stages).
+
+        Falls back to the mock provider on any upstream failure (bad key,
+        quota exhausted, provider outage) so a broken API key degrades the
+        output instead of breaking the app.
+        """
+        try:
+            if self.provider == "anthropic" and settings.anthropic_api_key:
+                return await self._anthropic_complete(system, prompt)
+            if self.provider == "openai" and settings.openai_api_key:
+                return await self._openai_complete(system, prompt)
+            if self.provider == "gemini" and settings.gemini_api_key:
+                return await self._gemini_complete(system, prompt)
+        except (httpx.HTTPError, KeyError, IndexError):
+            pass
         return self._mock_complete(system, prompt)
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
         """Streaming completion (used by the final refine stage / SSE)."""
-        if self.provider == "anthropic" and settings.anthropic_api_key:
-            async for tok in self._anthropic_stream(system, prompt):
-                yield tok
-        elif self.provider == "openai" and settings.openai_api_key:
-            async for tok in self._openai_stream(system, prompt):
-                yield tok
-        elif self.provider == "gemini" and settings.gemini_api_key:
-            async for tok in self._gemini_stream(system, prompt):
-                yield tok
-        else:
-            for tok in _tokenize(self._mock_complete(system, prompt)[0]):
-                yield tok
+        try:
+            if self.provider == "anthropic" and settings.anthropic_api_key:
+                async for tok in self._anthropic_stream(system, prompt):
+                    yield tok
+                return
+            if self.provider == "openai" and settings.openai_api_key:
+                async for tok in self._openai_stream(system, prompt):
+                    yield tok
+                return
+            if self.provider == "gemini" and settings.gemini_api_key:
+                async for tok in self._gemini_stream(system, prompt):
+                    yield tok
+                return
+        except (httpx.HTTPError, KeyError, IndexError):
+            pass
+        for tok in _tokenize(self._mock_complete(system, prompt)[0]):
+            yield tok
 
     async def embed(self, text: str) -> list[float]:
         if self.provider == "openai" and settings.openai_api_key:
@@ -100,6 +113,7 @@ class LLMClient:
                     "messages": [{"role": "user", "content": prompt}],
                 },
             ) as resp:
+                resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):
                         continue
@@ -145,6 +159,7 @@ class LLMClient:
                     ],
                 },
             ) as resp:
+                resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):
                         continue
@@ -188,6 +203,7 @@ class LLMClient:
                     "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                 },
             ) as resp:
+                resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):
                         continue
