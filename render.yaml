@@ -1,0 +1,82 @@
+databases:
+  - name: hone-db
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: redis
+    name: hone-redis
+    plan: free
+    ipAllowList: []
+
+  - type: web
+    name: hone-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hone-db
+          property: connectionString
+      # Render gives a postgres:// URL; SQLAlchemy's async driver needs
+      # postgresql+asyncpg://, so this is patched at boot — see backend/app/config.py.
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: hone-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: LLM_PROVIDER
+        value: mock
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      # Set to your deployed Vercel URL(s), comma-separated, no trailing slash.
+      - key: CORS_ORIGINS
+        value: http://localhost:5173
+
+  - type: worker
+    name: hone-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.celery_app.celery worker --loglevel=info
+    plan: free
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hone-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: hone-redis
+          property: connectionString
+      - key: JWT_SECRET
+        fromService:
+          type: web
+          name: hone-api
+          envVarKey: JWT_SECRET
+      - key: LLM_PROVIDER
+        value: mock
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
