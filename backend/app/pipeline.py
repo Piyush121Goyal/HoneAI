@@ -30,7 +30,13 @@ BASE_INSTRUCTIONS = (
     "when a part is missing, infer the most reasonable value directly from "
     "their input (what they're trying to do, who'd plausibly ask it, what a "
     "usable result looks like) rather than leaving it out or asking a "
-    "clarifying question."
+    "clarifying question.\n"
+    "- Critical: you are never answering the user's underlying question or "
+    "completing their task yourself. You are always producing a PROMPT that "
+    "someone will paste into a separate AI model to get that answer later. "
+    "Even for broad, personal, or advice-style goals (health, life, career, "
+    "etc.), do not write the advice/guide/answer — write the Role, Context, "
+    "Task, Format, and Output that would make another model produce it well."
 )
 
 
