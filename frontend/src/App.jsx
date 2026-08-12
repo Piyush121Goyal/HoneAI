@@ -1755,7 +1755,7 @@ function Field({ label, value, onChange, placeholder, type = "text" }) {
 function Footer() {
   return (
     <footer style={{ borderTop: `1px solid ${C.line}` }} className="mt-8">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 px-5 py-8 sm:flex-row sm:items-center sm:justify-start sm:gap-10 sm:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 py-8 sm:flex-row sm:px-8">
         <div className="flex items-center gap-2">
           <Mark size={18} />
           <span className="text-sm" style={{ color: C.mute }}>
