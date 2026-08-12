@@ -250,24 +250,6 @@ const api = {
   },
 };
 
-/* seed examples so History isn't empty on first load */
-const SEED = [
-  {
-    id: "s1",
-    goal: "Write a cold email to a startup founder asking for a meeting",
-    model: "GPT-4o",
-    rating: 1,
-    at: Date.now() - 1000 * 60 * 60 * 5,
-  },
-  {
-    id: "s2",
-    goal: "Explain how JWT refresh tokens work to a junior dev",
-    model: "Claude",
-    rating: 1,
-    at: Date.now() - 1000 * 60 * 60 * 26,
-  },
-];
-
 /* ============================== APP ============================== */
 export default function App() {
   const [view, setView] = useState("home"); // 'home' | 'app'
@@ -307,7 +289,7 @@ export default function App() {
   // Once we know who's signed in, load their saved prompts from the backend.
   useEffect(() => {
     if (!user || !token) {
-      setHistory(SEED);
+      setHistory([]);
       return;
     }
     api
@@ -330,13 +312,13 @@ export default function App() {
     api.logout().catch(() => {});
     setUser(null);
     setToken(null);
-    setHistory(SEED);
+    setHistory([]);
   };
 
   return (
     <div
       style={{ background: C.bg, color: C.text, fontFamily: SANS }}
-      className="min-h-screen w-full overflow-x-hidden antialiased"
+      className="flex min-h-screen w-full flex-col overflow-x-hidden antialiased"
     >
       <StyleTag />
       <TopNav
@@ -347,26 +329,28 @@ export default function App() {
         onSignOut={signOut}
       />
 
-      {view === "home" ? (
-        <Home
-          reduce={reduce}
-          onStart={() => setView("app")}
-          onExample={(g) => {
-            setExampleReq({ goal: g, nonce: Date.now() });
-            setView("app");
-          }}
-        />
-      ) : (
-        <Workspace
-          reduce={reduce}
-          user={user}
-          token={token}
-          history={history}
-          setHistory={setHistory}
-          requireAuth={() => setAuth("signup")}
-          exampleReq={exampleReq}
-        />
-      )}
+      <div className="flex-1">
+        {view === "home" ? (
+          <Home
+            reduce={reduce}
+            onStart={() => setView("app")}
+            onExample={(g) => {
+              setExampleReq({ goal: g, nonce: Date.now() });
+              setView("app");
+            }}
+          />
+        ) : (
+          <Workspace
+            reduce={reduce}
+            user={user}
+            token={token}
+            history={history}
+            setHistory={setHistory}
+            requireAuth={() => setAuth("signup")}
+            exampleReq={exampleReq}
+          />
+        )}
+      </div>
 
       <Footer />
 
@@ -1194,7 +1178,13 @@ function Workspace({ user, token, history, setHistory, requireAuth, reduce, exam
       </div>
 
       {tab === "history" ? (
-        <History history={history} setHistory={setHistory} token={token} />
+        <History
+          history={history}
+          setHistory={setHistory}
+          token={token}
+          user={user}
+          requireAuth={requireAuth}
+        />
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
           {/* ---- input ---- */}
@@ -1489,7 +1479,24 @@ function RateBtn({ children, active, onClick }) {
 }
 
 /* ----------------------------- history ----------------------------- */
-function History({ history, setHistory, token }) {
+function History({ history, setHistory, token, user, requireAuth }) {
+  if (!user) {
+    return (
+      <div
+        className="rounded-2xl p-12 text-center"
+        style={{ background: C.panel, border: `1px solid ${C.line}` }}
+      >
+        <p style={{ color: C.mute }}>Log in to see your history.</p>
+        <button
+          onClick={requireAuth}
+          className="mt-4 rounded-full px-4 py-1.5 text-sm font-medium transition-transform active:scale-95"
+          style={{ background: C.white, color: "#000" }}
+        >
+          Log in
+        </button>
+      </div>
+    );
+  }
   if (!history.length) {
     return (
       <div
