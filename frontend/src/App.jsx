@@ -410,14 +410,6 @@ function TopNav({ view, setView, user, onAuth, onSignOut }) {
           </span>
         </button>
 
-        <nav className="hidden items-center gap-1 md:flex">
-          <NavLink active={view === "app"} onClick={() => setView("app")}>
-            Optimize
-          </NavLink>
-          <NavLink onClick={() => setView("app")}>History</NavLink>
-          <NavLink>Docs</NavLink>
-        </nav>
-
         <div className="flex items-center gap-2">
           {user ? (
             <div className="flex items-center gap-3">
@@ -463,20 +455,6 @@ function TopNav({ view, setView, user, onAuth, onSignOut }) {
         </div>
       </div>
     </header>
-  );
-}
-
-function NavLink({ children, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-full px-3 py-1.5 text-sm transition-colors"
-      style={{ color: active ? C.text : C.mute }}
-      onMouseEnter={(e) => (e.currentTarget.style.color = C.text)}
-      onMouseLeave={(e) => (e.currentTarget.style.color = active ? C.text : C.mute)}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -1777,7 +1755,7 @@ function Field({ label, value, onChange, placeholder, type = "text" }) {
 function Footer() {
   return (
     <footer style={{ borderTop: `1px solid ${C.line}` }} className="mt-8">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 py-8 sm:flex-row sm:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 px-5 py-8 sm:flex-row sm:items-center sm:justify-start sm:gap-10 sm:px-8">
         <div className="flex items-center gap-2">
           <Mark size={18} />
           <span className="text-sm" style={{ color: C.mute }}>
@@ -1785,7 +1763,6 @@ function Footer() {
           </span>
         </div>
         <div className="flex items-center gap-6 text-sm" style={{ color: C.dim }}>
-          <span>Docs</span>
           <span>Privacy</span>
           <span>© 2026</span>
         </div>
