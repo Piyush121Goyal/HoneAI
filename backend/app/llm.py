@@ -91,6 +91,7 @@ class LLMClient:
                 json={
                     "model": settings.llm_model,
                     "max_tokens": 1500,
+                    "temperature": 0.5,
                     "system": system,
                     "messages": [{"role": "user", "content": prompt}],
                 },
@@ -114,6 +115,7 @@ class LLMClient:
                 json={
                     "model": settings.llm_model,
                     "max_tokens": 1500,
+                    "temperature": 0.5,
                     "stream": True,
                     "system": system,
                     "messages": [{"role": "user", "content": prompt}],
@@ -138,6 +140,9 @@ class LLMClient:
                 headers={"Authorization": f"Bearer {settings.openai_api_key}"},
                 json={
                     "model": settings.llm_model,
+                    "max_tokens": 1500,
+                    "temperature": 0.5,
+                    "frequency_penalty": 0.3,
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": prompt},
@@ -158,6 +163,9 @@ class LLMClient:
                 headers={"Authorization": f"Bearer {settings.openai_api_key}"},
                 json={
                     "model": settings.llm_model,
+                    "max_tokens": 1500,
+                    "temperature": 0.5,
+                    "frequency_penalty": 0.3,
                     "stream": True,
                     "messages": [
                         {"role": "system", "content": system},
@@ -187,6 +195,7 @@ class LLMClient:
                 json={
                     "systemInstruction": {"parts": [{"text": system}]},
                     "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.5, "maxOutputTokens": 1500},
                 },
             )
             r.raise_for_status()
@@ -207,6 +216,7 @@ class LLMClient:
                 json={
                     "systemInstruction": {"parts": [{"text": system}]},
                     "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.5, "maxOutputTokens": 1500},
                 },
             ) as resp:
                 resp.raise_for_status()
@@ -235,6 +245,9 @@ class LLMClient:
                 headers={"Authorization": f"Bearer {settings.groq_api_key}"},
                 json={
                     "model": settings.llm_model,
+                    "max_tokens": 1500,
+                    "temperature": 0.5,
+                    "frequency_penalty": 0.3,
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": prompt},
@@ -255,6 +268,9 @@ class LLMClient:
                 headers={"Authorization": f"Bearer {settings.groq_api_key}"},
                 json={
                     "model": settings.llm_model,
+                    "max_tokens": 1500,
+                    "temperature": 0.5,
+                    "frequency_penalty": 0.3,
                     "stream": True,
                     "messages": [
                         {"role": "system", "content": system},

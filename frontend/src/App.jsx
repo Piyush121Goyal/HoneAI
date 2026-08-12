@@ -141,7 +141,6 @@ const est = (s) => Math.max(1, Math.ceil(s.length / 4)); // rough token count
  * Bearer header and kept in memory (never localStorage).
  * ================================================================== */
 const API_BASE = import.meta.env.VITE_API_BASE || "";
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 const authHeader = (t) => (t ? { Authorization: `Bearer ${t}` } : {});
 
@@ -1598,39 +1597,6 @@ function AuthModal({ mode, switchMode, onClose, onDone }) {
     }
   };
 
-  // Optional: real Google sign-in via Google Identity Services, only if a
-  // client ID is configured (VITE_GOOGLE_CLIENT_ID). Falls back to a
-  // disabled button with a hint otherwise.
-  const googleSignIn = () => {
-    if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.id) return;
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: async ({ credential }) => {
-        setError("");
-        setBusy(true);
-        try {
-          const data = await api.auth("google", { id_token: credential });
-          onDone(data);
-        } catch (e) {
-          setError("Google sign-in failed.");
-        } finally {
-          setBusy(false);
-        }
-      },
-    });
-    window.google.accounts.id.prompt();
-  };
-
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
-    if (document.getElementById("google-identity-script")) return;
-    const s = document.createElement("script");
-    s.id = "google-identity-script";
-    s.src = "https://accounts.google.com/gsi/client";
-    s.async = true;
-    document.head.appendChild(s);
-  }, []);
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -1668,25 +1634,6 @@ function AuthModal({ mode, switchMode, onClose, onDone }) {
             ? "Save and version every prompt you optimize."
             : "Sign in to pick up where you left off."}
         </p>
-
-        <button
-          className="mt-6 flex w-full items-center justify-center gap-2.5 rounded-xl py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: C.white, color: "#000" }}
-          onClick={googleSignIn}
-          disabled={!GOOGLE_CLIENT_ID}
-          title={GOOGLE_CLIENT_ID ? undefined : "Set VITE_GOOGLE_CLIENT_ID to enable Google sign-in"}
-        >
-          <GoogleIcon />
-          Continue with Google
-        </button>
-
-        <div className="my-5 flex items-center gap-3">
-          <span className="h-px flex-1" style={{ background: C.line }} />
-          <span className="text-xs" style={{ color: C.dim }}>
-            or
-          </span>
-          <span className="h-px flex-1" style={{ background: C.line }} />
-        </div>
 
         <div className="space-y-3">
           {signup && (
@@ -1788,29 +1735,6 @@ function Mark({ size = 22 }) {
         stroke={C.white}
         strokeWidth="1.6"
         strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.27-4.74 3.27-8.09z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.09a6.6 6.6 0 0 1 0-4.18V7.07H2.18a11 11 0 0 0 0 9.86l3.66-2.84z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.75c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 1.48 14.97.5 12 .5A11 11 0 0 0 2.18 7.07l3.66 2.84C6.71 6.68 9.14 4.75 12 4.75z"
       />
     </svg>
   );
