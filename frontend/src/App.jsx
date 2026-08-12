@@ -1192,11 +1192,15 @@ function Workspace({ user, token, history, setHistory, requireAuth, reduce, exam
             style={{ background: C.panel, border: `1px solid ${C.line}` }}
           >
             <label
-              className="mb-3 block text-sm font-medium"
+              className="mb-1.5 block text-sm font-medium"
               style={{ color: C.text }}
             >
-              What do you want the AI to do?
+              Write down anything that comes to mind
             </label>
+            <p className="mb-3 text-[13px] leading-relaxed" style={{ color: C.dim }}>
+              It doesn't have to be perfect — Hone AI will optimize it into a
+              prompt built to get the best results from any model out there.
+            </p>
             <textarea
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
