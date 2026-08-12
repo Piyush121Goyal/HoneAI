@@ -13,35 +13,51 @@ from .llm import LLMClient, Usage
 
 STAGES = ["Understanding", "Drafting", "Refining"]
 
+# Standing instructions injected into every stage of every request, regardless
+# of goal/model/tone/format. This is where house rules and quality guardrails
+# live — edit this list to change behavior across the whole pipeline at once.
+BASE_INSTRUCTIONS = (
+    "House rules, always follow these:\n"
+    "- Never repeat the same word or phrase back-to-back or redundantly.\n"
+    "- Never leave placeholder text like [insert X here] or TODO — write "
+    "concrete, usable content or a clearly labeled example instead.\n"
+    "- Use correct spacing, grammar, and punctuation throughout.\n"
+    "- Do not add meta-commentary about what you are about to do or did — "
+    "output only the requested content.\n"
+    "- Be concise. Do not pad with filler sentences or restate the task back."
+)
+
 
 def _system_for(stage: str, opts: dict) -> str:
     model = opts.get("model", "GPT-4o")
     tone = opts.get("tone", "Direct")
     fmt = opts.get("format", "Markdown")
     if stage == "analyze":
-        return (
+        body = (
             "You are a prompt engineer. Read the user's goal and restate, in one "
             "short paragraph, the true intent, the audience, and any implicit "
             "constraints. Do not write the prompt yet."
         )
-    if stage == "draft":
-        return (
+    elif stage == "draft":
+        body = (
             f"You are a prompt engineer targeting {model}. Write a first "
             f"structured prompt with a role, task, context, requirements, an "
             f"explicit output format ({fmt}), and guardrails. Voice: {tone}."
         )
-    if stage == "critique":
-        return (
+    elif stage == "critique":
+        body = (
             "You are a strict reviewer. List the weaknesses of the draft prompt: "
             "vague wording, missing constraints, ambiguity, or anything that would "
             "produce an inconsistent result. Be terse."
         )
-    # refine
-    return (
-        f"You are a prompt engineer targeting {model}. Rewrite the draft into the "
-        f"final prompt, fixing every issue raised in the critique. Voice: {tone}. "
-        f"Output format for the end model: {fmt}. Return ONLY the final prompt."
-    )
+    else:
+        # refine
+        body = (
+            f"You are a prompt engineer targeting {model}. Rewrite the draft into the "
+            f"final prompt, fixing every issue raised in the critique. Voice: {tone}. "
+            f"Output format for the end model: {fmt}. Return ONLY the final prompt."
+        )
+    return f"{BASE_INSTRUCTIONS}\n\n{body}"
 
 
 async def optimize_stream(
