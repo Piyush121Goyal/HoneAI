@@ -24,7 +24,13 @@ BASE_INSTRUCTIONS = (
     "- Use correct spacing, grammar, and punctuation throughout.\n"
     "- Do not add meta-commentary about what you are about to do or did — "
     "output only the requested content.\n"
-    "- Be concise. Do not pad with filler sentences or restate the task back."
+    "- Be concise. Do not pad with filler sentences or restate the task back.\n"
+    "- Always structure the final prompt using the RCTFO model: Role, Context, "
+    "Task, Format, Output. The user will rarely specify all five explicitly — "
+    "when a part is missing, infer the most reasonable value directly from "
+    "their input (what they're trying to do, who'd plausibly ask it, what a "
+    "usable result looks like) rather than leaving it out or asking a "
+    "clarifying question."
 )
 
 
@@ -40,22 +46,30 @@ def _system_for(stage: str, opts: dict) -> str:
         )
     elif stage == "draft":
         body = (
-            f"You are a prompt engineer targeting {model}. Write a first "
-            f"structured prompt with a role, task, context, requirements, an "
-            f"explicit output format ({fmt}), and guardrails. Voice: {tone}."
+            f"You are a prompt engineer targeting {model}. Write a first prompt "
+            f"structured around the RCTFO model:\n"
+            f"- Role: who/what the target model should act as.\n"
+            f"- Context: the situation, audience, and any constraints.\n"
+            f"- Task: exactly what to do, stated unambiguously.\n"
+            f"- Format: the expected output format ({fmt}).\n"
+            f"- Output: what a finished, usable result looks like.\n"
+            f"Voice: {tone}."
         )
     elif stage == "critique":
         body = (
             "You are a strict reviewer. List the weaknesses of the draft prompt: "
-            "vague wording, missing constraints, ambiguity, or anything that would "
-            "produce an inconsistent result. Be terse."
+            "vague wording, a missing or weak Role/Context/Task/Format/Output "
+            "section, ambiguity, or anything that would produce an inconsistent "
+            "result. Be terse."
         )
     else:
         # refine
         body = (
-            f"You are a prompt engineer targeting {model}. Rewrite the draft into the "
-            f"final prompt, fixing every issue raised in the critique. Voice: {tone}. "
-            f"Output format for the end model: {fmt}. Return ONLY the final prompt."
+            f"You are a prompt engineer targeting {model}. Rewrite the draft into "
+            f"the final prompt, fixing every issue raised in the critique, and "
+            f"structured clearly around Role, Context, Task, Format, and Output. "
+            f"Voice: {tone}. Output format for the end model: {fmt}. Return ONLY "
+            f"the final prompt."
         )
     return f"{BASE_INSTRUCTIONS}\n\n{body}"
 
