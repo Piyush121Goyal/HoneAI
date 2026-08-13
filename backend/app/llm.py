@@ -50,28 +50,38 @@ class LLMClient:
         return self._mock_complete(system, prompt)
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
-        """Streaming completion (used by the final refine stage / SSE)."""
+        """Streaming completion (used by the final refine stage / SSE).
+
+        Falls back to the mock provider only if the real provider fails
+        *before* producing any output. If it fails partway through (a
+        connection drop mid-stream, say), we stop instead of splicing in a
+        fresh, unrelated mock completion — half a real answer glued to a
+        whole fake one is worse than a real answer that ends early.
+        """
+        streamer = None
+        if self.provider == "anthropic" and settings.anthropic_api_key:
+            streamer = self._anthropic_stream(system, prompt)
+        elif self.provider == "openai" and settings.openai_api_key:
+            streamer = self._openai_stream(system, prompt)
+        elif self.provider == "gemini" and settings.gemini_api_key:
+            streamer = self._gemini_stream(system, prompt)
+        elif self.provider == "groq" and settings.groq_api_key:
+            streamer = self._groq_stream(system, prompt)
+
+        if streamer is None:
+            for tok in _tokenize(self._mock_complete(system, prompt)[0]):
+                yield tok
+            return
+
+        yielded_any = False
         try:
-            if self.provider == "anthropic" and settings.anthropic_api_key:
-                async for tok in self._anthropic_stream(system, prompt):
-                    yield tok
-                return
-            if self.provider == "openai" and settings.openai_api_key:
-                async for tok in self._openai_stream(system, prompt):
-                    yield tok
-                return
-            if self.provider == "gemini" and settings.gemini_api_key:
-                async for tok in self._gemini_stream(system, prompt):
-                    yield tok
-                return
-            if self.provider == "groq" and settings.groq_api_key:
-                async for tok in self._groq_stream(system, prompt):
-                    yield tok
-                return
+            async for tok in streamer:
+                yielded_any = True
+                yield tok
         except (httpx.HTTPError, KeyError, IndexError):
-            pass
-        for tok in _tokenize(self._mock_complete(system, prompt)[0]):
-            yield tok
+            if not yielded_any:
+                for tok in _tokenize(self._mock_complete(system, prompt)[0]):
+                    yield tok
 
     async def embed(self, text: str) -> list[float]:
         if self.provider == "openai" and settings.openai_api_key:
