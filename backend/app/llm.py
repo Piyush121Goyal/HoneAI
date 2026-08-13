@@ -32,31 +32,30 @@ class LLMClient:
     async def complete(self, system: str, prompt: str) -> tuple[str, Usage]:
         """Single-shot, non-streaming completion (used by pipeline stages).
 
-        Falls back to the mock provider on any upstream failure (bad key,
-        quota exhausted, provider outage) so a broken API key degrades the
-        output instead of breaking the app.
+        Uses the mock provider only when no real provider is configured at
+        all. If a real provider *is* configured but the call fails (rate
+        limit, outage, bad key), the error is raised rather than silently
+        patched with mock output here — a multi-call pipeline needs to
+        decide, at the top level, whether to restart the whole thing on
+        mock rather than mixing real and mock output between stages.
         """
-        try:
-            if self.provider == "anthropic" and settings.anthropic_api_key:
-                return await self._anthropic_complete(system, prompt)
-            if self.provider == "openai" and settings.openai_api_key:
-                return await self._openai_complete(system, prompt)
-            if self.provider == "gemini" and settings.gemini_api_key:
-                return await self._gemini_complete(system, prompt)
-            if self.provider == "groq" and settings.groq_api_key:
-                return await self._groq_complete(system, prompt)
-        except (httpx.HTTPError, KeyError, IndexError):
-            pass
+        if self.provider == "anthropic" and settings.anthropic_api_key:
+            return await self._anthropic_complete(system, prompt)
+        if self.provider == "openai" and settings.openai_api_key:
+            return await self._openai_complete(system, prompt)
+        if self.provider == "gemini" and settings.gemini_api_key:
+            return await self._gemini_complete(system, prompt)
+        if self.provider == "groq" and settings.groq_api_key:
+            return await self._groq_complete(system, prompt)
         return self._mock_complete(system, prompt)
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
         """Streaming completion (used by the final refine stage / SSE).
 
-        Falls back to the mock provider only if the real provider fails
-        *before* producing any output. If it fails partway through (a
-        connection drop mid-stream, say), we stop instead of splicing in a
-        fresh, unrelated mock completion — half a real answer glued to a
-        whole fake one is worse than a real answer that ends early.
+        Same rule as complete(): no silent fallback here. If the real
+        provider fails partway through, the exception propagates so the
+        caller — which knows whether any output has already reached the
+        user — can decide what to do instead of this method guessing.
         """
         streamer = None
         if self.provider == "anthropic" and settings.anthropic_api_key:
@@ -73,15 +72,8 @@ class LLMClient:
                 yield tok
             return
 
-        yielded_any = False
-        try:
-            async for tok in streamer:
-                yielded_any = True
-                yield tok
-        except (httpx.HTTPError, KeyError, IndexError):
-            if not yielded_any:
-                for tok in _tokenize(self._mock_complete(system, prompt)[0]):
-                    yield tok
+        async for tok in streamer:
+            yield tok
 
     async def embed(self, text: str) -> list[float]:
         if self.provider == "openai" and settings.openai_api_key:
@@ -320,6 +312,10 @@ class LLMClient:
 # --------------------------- helper functions --------------------------- #
 def _tokenize(s: str) -> list[str]:
     return re.findall(r"\s+|\S+", s)
+
+
+# Public alias — used by pipeline.py's clean mock fallback path.
+tokenize_text = _tokenize
 
 
 def _mock_embedding(text: str, dim: int) -> list[float]:

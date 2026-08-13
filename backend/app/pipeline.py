@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from typing import AsyncIterator
 
-from .llm import LLMClient, Usage
+from .llm import LLMClient, Usage, build_structured_prompt, tokenize_text
 
 STAGES = ["Understanding", "Drafting", "Refining"]
 
 # Bump this whenever BASE_INSTRUCTIONS or any stage prompt changes. It's
 # folded into the /optimize cache key so a prompt-logic change can't get
 # masked by a stale cached response from before the change.
-PIPELINE_VERSION = "3"
+PIPELINE_VERSION = "4"
 
 # Standing instructions injected into every stage of every request, regardless
 # of goal/model/tone/format. This is where house rules and quality guardrails
@@ -85,56 +85,103 @@ def _system_for(stage: str, opts: dict) -> str:
     return f"{BASE_INSTRUCTIONS}\n\n{body}"
 
 
-async def optimize_stream(
-    goal: str, opts: dict, llm: LLMClient | None = None
-) -> AsyncIterator[dict]:
-    """Yield SSE-shaped dicts: {'event': 'stage'|'token'|'done', 'data': ...}."""
-    llm = llm or LLMClient()
-    total = Usage()
+async def _mock_fallback(goal: str) -> AsyncIterator[dict]:
+    """A clean, single-shot mock generation built from the ORIGINAL goal only.
 
-    # stage 0 — understand
-    yield {"event": "stage", "data": {"index": 0}}
-    intent, u = await llm.complete(_system_for("analyze", opts), goal)
-    total.prompt_tokens += u.prompt_tokens
-    total.completion_tokens += u.completion_tokens
-
-    # stage 1 — draft
-    yield {"event": "stage", "data": {"index": 1}}
-    draft, u = await llm.complete(
-        _system_for("draft", opts), f"Goal: {goal}\n\nIntent analysis:\n{intent}"
-    )
-    total.prompt_tokens += u.prompt_tokens
-    total.completion_tokens += u.completion_tokens
-
-    # (critique runs internally to guide the refine step)
-    critique, u = await llm.complete(_system_for("critique", opts), draft)
-    total.prompt_tokens += u.prompt_tokens
-    total.completion_tokens += u.completion_tokens
-
-    # stage 2 — refine (streamed)
+    Used when a real provider fails partway through the multi-stage
+    pipeline, before any real refine token has reached the client. Critically
+    this never touches the analyze/draft/critique text already produced —
+    those stages can themselves be a mix of real and mock output depending on
+    where the failure hit, and feeding that accumulated blob back into the
+    mock generator is exactly what used to produce garbled, duplicated,
+    nested text. Restarting clean from the goal is the only safe option.
+    """
+    text = build_structured_prompt(goal)
     yield {"event": "stage", "data": {"index": 2}}
-    refine_input = (
-        f"Goal: {goal}\n\nDraft:\n{draft}\n\nCritique to fix:\n{critique}"
-    )
-    final_parts: list[str] = []
-    async for tok in llm.stream(_system_for("refine", opts), refine_input):
-        if not tok:
-            continue
-        final_parts.append(tok)
+    for tok in tokenize_text(text):
         yield {"event": "token", "data": {"text": tok}}
-
-    final_text = "".join(final_parts)
-    total.completion_tokens += len(final_text) // 4
     yield {
         "event": "done",
         "data": {
-            "prompt": final_text,
+            "prompt": text,
             "usage": {
-                "prompt_tokens": total.prompt_tokens,
-                "completion_tokens": total.completion_tokens,
+                "prompt_tokens": len(goal) // 4,
+                "completion_tokens": len(text) // 4,
             },
         },
     }
+
+
+async def optimize_stream(
+    goal: str, opts: dict, llm: LLMClient | None = None
+) -> AsyncIterator[dict]:
+    """Yield SSE-shaped dicts: {'event': 'stage'|'token'|'done', 'data': ...}.
+
+    Each of the 4 pipeline stages (analyze/draft/critique/refine) is its own
+    LLM call, and any one of them can fail independently (rate limit, outage)
+    without the others failing. If that happens before any refine token has
+    been shown to the client, we restart clean on the mock generator (see
+    _mock_fallback). If it happens *after* real refine tokens have already
+    streamed out, we stop rather than splice in anything further — a
+    real answer that ends early beats a real answer glued to a fake one.
+    """
+    llm = llm or LLMClient()
+    total = Usage()
+    refine_started = False
+
+    try:
+        # stage 0 — understand
+        yield {"event": "stage", "data": {"index": 0}}
+        intent, u = await llm.complete(_system_for("analyze", opts), goal)
+        total.prompt_tokens += u.prompt_tokens
+        total.completion_tokens += u.completion_tokens
+
+        # stage 1 — draft
+        yield {"event": "stage", "data": {"index": 1}}
+        draft, u = await llm.complete(
+            _system_for("draft", opts), f"Goal: {goal}\n\nIntent analysis:\n{intent}"
+        )
+        total.prompt_tokens += u.prompt_tokens
+        total.completion_tokens += u.completion_tokens
+
+        # (critique runs internally to guide the refine step)
+        critique, u = await llm.complete(_system_for("critique", opts), draft)
+        total.prompt_tokens += u.prompt_tokens
+        total.completion_tokens += u.completion_tokens
+
+        # stage 2 — refine (streamed)
+        yield {"event": "stage", "data": {"index": 2}}
+        refine_input = (
+            f"Goal: {goal}\n\nDraft:\n{draft}\n\nCritique to fix:\n{critique}"
+        )
+        final_parts: list[str] = []
+        async for tok in llm.stream(_system_for("refine", opts), refine_input):
+            if not tok:
+                continue
+            refine_started = True
+            final_parts.append(tok)
+            yield {"event": "token", "data": {"text": tok}}
+
+        final_text = "".join(final_parts)
+        if not final_text.strip():
+            raise RuntimeError("refine stage produced no output")
+
+        total.completion_tokens += len(final_text) // 4
+        yield {
+            "event": "done",
+            "data": {
+                "prompt": final_text,
+                "usage": {
+                    "prompt_tokens": total.prompt_tokens,
+                    "completion_tokens": total.completion_tokens,
+                },
+            },
+        }
+    except Exception:
+        if refine_started:
+            return
+        async for evt in _mock_fallback(goal):
+            yield evt
 
 
 async def optimize_once(goal: str, opts: dict, llm: LLMClient | None = None) -> dict:
