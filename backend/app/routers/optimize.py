@@ -10,7 +10,7 @@ from ..database import get_db
 from ..deps import enforce_rate_limit, get_optional_user
 from ..llm import LLMClient
 from ..models import UsageLog, User
-from ..pipeline import optimize_stream
+from ..pipeline import PIPELINE_VERSION, optimize_stream
 from ..redis_client import cache_get, cache_set
 from ..schemas import OptimizeIn
 
@@ -25,7 +25,9 @@ async def optimize(
 ):
     opts = {"model": body.model, "tone": body.tone, "format": body.format}
     cache_key = "opt:" + hashlib.sha256(
-        json.dumps({"g": body.goal, **opts}, sort_keys=True).encode()
+        json.dumps(
+            {"v": PIPELINE_VERSION, "g": body.goal, **opts}, sort_keys=True
+        ).encode()
     ).hexdigest()
 
     async def event_source():

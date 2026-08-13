@@ -13,6 +13,11 @@ from .llm import LLMClient, Usage
 
 STAGES = ["Understanding", "Drafting", "Refining"]
 
+# Bump this whenever BASE_INSTRUCTIONS or any stage prompt changes. It's
+# folded into the /optimize cache key so a prompt-logic change can't get
+# masked by a stale cached response from before the change.
+PIPELINE_VERSION = "3"
+
 # Standing instructions injected into every stage of every request, regardless
 # of goal/model/tone/format. This is where house rules and quality guardrails
 # live — edit this list to change behavior across the whole pipeline at once.
